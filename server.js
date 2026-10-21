@@ -4,7 +4,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const nodemailer = require('nodemailer');
-
+app.set("trust proxy", 1);
 const app = express();
 const PORT = process.env.PORT || 3000;
 
