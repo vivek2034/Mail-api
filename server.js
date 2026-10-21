@@ -15,20 +15,30 @@ const OWNER_EMAIL = process.env.OWNER_EMAIL || SMTP_USER;
 
 app.set('trust proxy', 1);
 
-// Security middleware
 app.use(helmet());
 
-app.use(
-  cors({
-    origin: process.env.ALLOWED_ORIGIN || '*',
-    methods: ['POST', 'OPTIONS'],
-    allowedHeaders: ['Content-Type']
-  })
-);
+const allowedOrigins = [
+  'https://vivek-3004.github.io',
+  'http://localhost:3000',
+  'http://localhost:5173'
+];
+
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (!origin || allowedOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin || '*');
+    res.header('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type');
+  }
+  next();
+});
+
+app.options('/api/contact', (req, res) => {
+  res.sendStatus(204);
+});
 
 app.use(express.json({ limit: '10kb' }));
 
-// Rate limit
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 5,
@@ -46,7 +56,7 @@ function escapeHtml(value = '') {
     .replace(/'/g, '&#039;');
 }
 
-// Gmail SMTP setup
+// Gmail SMTP
 const transporter = nodemailer.createTransport({
   host: 'smtp.gmail.com',
   port: 587,
@@ -61,14 +71,9 @@ const transporter = nodemailer.createTransport({
 });
 
 transporter.verify()
-  .then(() => {
-    console.log('[MAIL] SMTP connection verified');
-  })
-  .catch((err) => {
-    console.error('[MAIL] SMTP verification failed:', err.message || err);
-  });
+  .then(() => console.log('[MAIL] SMTP connection verified'))
+  .catch((err) => console.error('[MAIL] SMTP verification failed:', err.message || err));
 
-// Contact endpoint
 app.post('/api/contact', async (req, res) => {
   try {
     const { name, email, subject, message } = req.body;
@@ -89,7 +94,7 @@ app.post('/api/contact', async (req, res) => {
 
     if (!SMTP_USER || !SMTP_PASS) {
       return res.status(503).json({
-        error: 'Email service is not configured. Please contact the site administrator.'
+        error: 'Email service is not configured.'
       });
     }
 
@@ -111,9 +116,6 @@ Subject: ${trimmedSubject}
 
 Message:
 ${trimmedMessage}
-
----
-Sent from your portfolio contact form.
       `,
       html: `
         <h2>New Contact Form Submission</h2>
@@ -123,8 +125,6 @@ Sent from your portfolio contact form.
         <hr>
         <p><strong>Message:</strong></p>
         <p>${safeMessage.replace(/\n/g, '<br>')}</p>
-        <hr>
-        <small>Sent from your portfolio contact form.</small>
       `
     };
 
@@ -136,21 +136,10 @@ Sent from your portfolio contact form.
 Hi ${trimmedName},
 
 Thanks for contacting me. I received your message and will get back to you soon.
-
-Your message:
-"${trimmedMessage}"
-
-Best regards,
-Portfolio Owner
       `,
       html: `
         <h2>Thanks for reaching out, ${safeName}</h2>
         <p>I received your message and will get back to you soon.</p>
-        <hr>
-        <p><strong>Your message:</strong></p>
-        <p>${safeMessage.replace(/\n/g, '<br>')}</p>
-        <hr>
-        <p>Best regards,<br>Portfolio Owner</p>
       `
     };
 
@@ -169,7 +158,6 @@ Portfolio Owner
   }
 });
 
-// Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'portfolio-contact' });
 });
