@@ -1,5 +1,4 @@
 require('dotenv').config();
-
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -13,28 +12,30 @@ const SMTP_USER = process.env.EMAIL_USER;
 const SMTP_PASS = process.env.EMAIL_PASS;
 const OWNER_EMAIL = process.env.OWNER_EMAIL || SMTP_USER;
 
-app.set('trust proxy', 1);
-
-app.use(helmet());
-
-const allowedOrigins = [
+const allowedOrigins = new Set([
+  'https://mail-test-a16k.onrender.com',
   'https://vivek-3004.github.io',
   'http://localhost:3000',
   'http://localhost:5173'
-];
+]);
+
+app.set('trust proxy', 1);
+app.use(helmet());
 
 app.use((req, res, next) => {
   const origin = req.headers.origin;
-  if (!origin || allowedOrigins.includes(origin)) {
-    res.header('Access-Control-Allow-Origin', origin || '*');
-    res.header('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type');
-  }
-  next();
-});
 
-app.options('/api/contact', (req, res) => {
-  res.sendStatus(204);
+  if (origin && allowedOrigins.has(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  }
+
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(204);
+  }
+
+  next();
 });
 
 app.use(express.json({ limit: '10kb' }));
@@ -56,7 +57,6 @@ function escapeHtml(value = '') {
     .replace(/'/g, '&#039;');
 }
 
-// Gmail SMTP
 const transporter = nodemailer.createTransport({
   host: 'smtp.gmail.com',
   port: 587,
@@ -72,7 +72,9 @@ const transporter = nodemailer.createTransport({
 
 transporter.verify()
   .then(() => console.log('[MAIL] SMTP connection verified'))
-  .catch((err) => console.error('[MAIL] SMTP verification failed:', err.message || err));
+  .catch((err) => {
+    console.error('[MAIL] SMTP verification failed:', err.message || err);
+  });
 
 app.post('/api/contact', async (req, res) => {
   try {
